@@ -47,6 +47,15 @@ class TradingAlgorithm:
         for position in open_positions:
             self.open_options.add(position.symbol)
     
+    def get_pending_orders(self) -> None:
+        reqParams = GetOrdersRequest(
+            status=QueryOrderStatus.OPEN,
+        )
+        open_orders = self.tradingClient.get_orders(reqParams)
+        pending_limit_orders = [order for order in open_orders if order.order_type == 'limit']
+        for order in pending_limit_orders:
+            self.open_options.add(order.symbol)
+    
     """
     *
     """
@@ -210,6 +219,7 @@ class TradingAlgorithm:
     """
     def run(self):
         self.get_open_options()
+        self.get_pending_orders()
 
         volatility = self.compute_sigma(self.get_stock_returns())
         print(f"Volatility: {volatility}")
@@ -221,7 +231,7 @@ class TradingAlgorithm:
         filtered_options = self.filter_options(available_options, latest_stock_price)
         option_to_market_price = self.get_option_market_prices(filtered_options)
 
-        average_r = 0.0435
+        average_r = 0.04302
         print(f"r: {average_r}")
 
         for option in filtered_options:
@@ -229,18 +239,18 @@ class TradingAlgorithm:
 
             if fair_value_price > option_to_market_price[option.symbol] + self.price_diff_tolerance:
                 print(f"Buying Call Option (K = {option.strike_price}, Exp = {option.expiration_date}): Fair Value Above Market Value ({fair_value_price} > {option_to_market_price[option.symbol]})")
-                self.place_market_order(option.symbol, 1, OrderSide.BUY, TimeInForce.DAY)
+                # self.place_market_order(option.symbol, 1, OrderSide.BUY, TimeInForce.DAY)
+                self.place_limit_order(option.symbol, 1, OrderSide.BUY, round(fair_value_price, 2))
 
             elif fair_value_price < option_to_market_price[option.symbol] - self.price_diff_tolerance:
                 print(f"Selling Call Option (K = {option.strike_price}, Exp = {option.expiration_date}): Fair Value Below Market Value ({fair_value_price} < {option_to_market_price[option.symbol]})")
-            
+                for i in range(100):
+                    try:
+                        self.place_limit_order(option.symbol, 1, OrderSide.SELL, round(fair_value_price, 2))
+                        break
+                    except:
+                        if i == 0:
+                            self.place_market_order(self.symbol, 100, OrderSide.BUY)
+
             else:
                 print(f"Call Option (K = {option.strike_price}, Exp = {option.expiration_date}): Fair Value Close To Market Value ({fair_value_price} ~ {option_to_market_price[option.symbol]})")
-
-
-
-apple = TradingAlgorithm('AAPL')
-apple.run()
-
-nvda = TradingAlgorithm('NVDA')
-nvda.run()
