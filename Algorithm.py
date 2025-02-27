@@ -1,7 +1,7 @@
 from config import API_KEY, API_SECRET, BASE_URL
+from BlackScholesSolver import BlackScholesSolver
 
 from datetime import date, datetime, timedelta
-import sympy as sp
 import numpy as np
 
 from alpaca.trading.client import TradingClient
@@ -13,20 +13,6 @@ from alpaca.data.requests import StockLatestQuoteRequest, OptionLatestTradeReque
 
 
 class TradingAlgorithm:
-    r = sp.Symbol('r')
-    S, K, T, sigma, C, a = sp.symbols('S K T sigma C a')
-
-    d1 = (sp.ln(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sp.sqrt(T))
-    d2 = d1 - sigma * sp.sqrt(T)
-
-    # N_d1 = (0.5 * (1 + sp.erf(d1 / sp.sqrt(2)))
-    # N_d2 = 0.5 * (1 + sp.erf(d2 / sp.sqrt(2)))
-
-    N_d = (1 / sp.sqrt(2 * sp.pi)) * sp.exp(-a ** 2 / 2)
-
-    black_scholes_eq = S * sp.integrate(N_d, (a, -np.Infinity, d1)) - K * sp.exp(-r * T) * sp.integrate(N_d, (a, -np.Infinity, d2)) - C
-
-
     """
     *
     """
@@ -38,6 +24,8 @@ class TradingAlgorithm:
         self.symbol = _symbol
         self.price_diff_tolerance = _price_diff_tolerance
 
+        self.black_scholes_solver = BlackScholesSolver()
+
     """
     *
     """
@@ -47,6 +35,9 @@ class TradingAlgorithm:
         for position in open_positions:
             self.open_options.add(position.symbol)
     
+    """
+    *
+    """
     def get_pending_orders(self) -> None:
         reqParams = GetOrdersRequest(
             status=QueryOrderStatus.OPEN,
@@ -108,32 +99,14 @@ class TradingAlgorithm:
     """
     *
     """
-    def compute_r(self, _K, _S, _T, _sigma, _C):
-        params = {
-            TradingAlgorithm.S: _S,
-            TradingAlgorithm.K: _K,
-            TradingAlgorithm.T: _T,
-            TradingAlgorithm.sigma: _sigma,
-            TradingAlgorithm.C: _C,
-        }
-
-        r_solution = sp.nsolve(TradingAlgorithm.black_scholes_eq.subs(params), TradingAlgorithm.r, 0.05)
-        return r_solution
+    # def compute_r(self, S, K, sigma, T, C):
+    #     return self.black_scholes_solver.solve_for_r(S, K, sigma, T, C)
 
     """
     *
     """
-    def compute_call_price(self, _K, _S, _T, _sigma, _r):
-        params = {
-            TradingAlgorithm.S: _S,
-            TradingAlgorithm.K: _K,
-            TradingAlgorithm.T: _T,
-            TradingAlgorithm.sigma: _sigma,
-            TradingAlgorithm.r: _r,
-        }
-
-        c_solution = sp.nsolve(TradingAlgorithm.black_scholes_eq.subs(params), TradingAlgorithm.C, 2)
-        return c_solution
+    def compute_call_price(self, S, K, sigma, T, r):
+        return self.black_scholes_solver.solve_for_C(S, K, sigma, T, r)
 
     """
     *
@@ -173,6 +146,9 @@ class TradingAlgorithm:
         available_options = self.tradingClient.get_option_contracts(reqParams)
         return available_options.option_contracts
     
+    """
+    *
+    """
     def filter_options(self, available_options, stock_price, lower_boundary=0.95, upper_boundary=1.1):
         options = []
 
@@ -210,7 +186,7 @@ class TradingAlgorithm:
     *
     """
     def get_fair_value_price(self, option, stock_price, volatility, r) -> float:
-        black_scholes_price = self.compute_call_price(option.strike_price, stock_price, self.compute_T(option.expiration_date), volatility, r)
+        black_scholes_price = self.compute_call_price(stock_price, option.strike_price, volatility, self.compute_T(option.expiration_date), r)
         fair_value_price = float(black_scholes_price)
         return fair_value_price
 
@@ -231,11 +207,10 @@ class TradingAlgorithm:
         filtered_options = self.filter_options(available_options, latest_stock_price)
         option_to_market_price = self.get_option_market_prices(filtered_options)
 
-        average_r = 0.04302
-        print(f"r: {average_r}")
+        r = 0.0432  # 10 Year Treasury Bond Rate
 
         for option in filtered_options:
-            fair_value_price = self.get_fair_value_price(option, latest_stock_price, volatility, average_r)
+            fair_value_price = self.get_fair_value_price(option, latest_stock_price, volatility, r)
 
             if fair_value_price > option_to_market_price[option.symbol] + self.price_diff_tolerance:
                 print(f"Buying Call Option (K = {option.strike_price}, Exp = {option.expiration_date}): Fair Value Above Market Value ({fair_value_price} > {option_to_market_price[option.symbol]})")
