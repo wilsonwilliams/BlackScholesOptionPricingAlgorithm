@@ -2,16 +2,8 @@ import sympy as sp
 
 
 class BlackScholesSolver:
-    def __init__(self, S, K, sigma, T, r=None, C=None) -> None:
-        """Initialize Black-Scholes parameters."""
-        self.S = S          # Stock price
-        self.K = K          # Strike price
-        self.sigma = sigma  # Volatility
-        self.T = T          # Time to expiration
-        self.C = C          # Call option price
-        self.r = r          # Interest rate to be solved
-        
-        # Define symbolic variables
+    def __init__(self) -> None:
+       # Define symbolic variables
         self._define_equation()
 
 
@@ -31,41 +23,26 @@ class BlackScholesSolver:
         self.black_scholes_equation = sp.Eq(C, S * N_d1 - K * sp.exp(-r * T) * N_d2)
 
 
-    def set_C(self, C) -> None:
-        self.C = C
-
-
-    def set_r(self, r) -> None:
-        self.r = r
-
-
-    def solve_for_C(self, initial_guess=3) -> float:
-        if self.r is None:
-            raise Exception("Error: Value of r is not set")
-
+    def solve_for_C(self, S, K, sigma, T, r, initial_guess=3) -> float:
         params = {
-            sp.Symbol('S'): self.S,
-            sp.Symbol('K'): self.K,
-            sp.Symbol('sigma'): self.sigma,
-            sp.Symbol('T'): self.T,
-            sp.Symbol('r'): self.r,
+            sp.Symbol('S'): S,
+            sp.Symbol('K'): K,
+            sp.Symbol('sigma'): sigma,
+            sp.Symbol('T'): T,
+            sp.Symbol('r'): r,
         }
 
         c_solution = sp.nsolve(self.black_scholes_equation.subs(params), sp.Symbol('C'), initial_guess)
         return float(c_solution)
 
 
-    def solve_for_r(self, initial_guess=0.05) -> float:
-        """Solve for r using numerical methods."""
-        if self.C is None:
-            raise Exception("Error: Value of call is not set")
-
+    def solve_for_r(self, S, K, sigma, T, C, initial_guess=0.05) -> float:
         params = {
-            sp.Symbol('S'): self.S,
-            sp.Symbol('K'): self.K,
-            sp.Symbol('sigma'): self.sigma,
-            sp.Symbol('T'): self.T,
-            sp.Symbol('C'): self.C,
+            sp.Symbol('S'): S,
+            sp.Symbol('K'): K,
+            sp.Symbol('sigma'): sigma,
+            sp.Symbol('T'): T,
+            sp.Symbol('C'): C,
         }
 
         r_solution = sp.nsolve(self.black_scholes_equation.subs(params), sp.Symbol('r'), initial_guess)
